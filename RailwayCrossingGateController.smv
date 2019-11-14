@@ -1,0 +1,112 @@
+--------------------------------------------------------
+-- Group - 5
+-- Saurabh Bazari & Sahib Khan
+-- Topic : Railway Crossing Gate Controller
+
+
+-- Consider a railway track crossing, 
+-- that is a road crosses a railway line. 
+-- We have to design a railway crossing gate 
+-- which is built on the road to 
+-- prevent vehicles from crossing while a train is passing.
+
+---------------------------------------------------------
+
+
+--------------------------------------------------------
+-- Module - Train
+---------------------------------------------------------
+
+MODULE Train(railCrossingStatus)
+VAR
+	trainStatus : {noInfo , horn , going, gone};
+
+ASSIGN
+	init(trainStatus) := noInfo;
+
+	next(trainStatus) := case
+								trainStatus = horn & railCrossingStatus = close : going;
+								trainStatus = going & railCrossingStatus = close : gone;
+								trainStatus = gone & railCrossingStatus = open : {noInfo,horn};
+								trainStatus = noInfo & railCrossingStatus = open : horn;
+								trainStatus = gone & railCrossingStatus = close : {gone,horn};
+								TRUE : trainStatus;
+							esac;
+
+--------------------------------------------------------
+-- Module - Railway Crossing Gate
+---------------------------------------------------------
+
+MODULE RailwayCrossing(trainStatus,vehicleStatus)
+VAR
+	railCrossingStatus : {open,close,wait};
+
+ASSIGN
+	
+	init(railCrossingStatus) := open;
+	next(railCrossingStatus) := case
+								railCrossingStatus = open & trainStatus = horn & vehicleStatus != passing : close;
+								railCrossingStatus = open & trainStatus = horn & vehicleStatus = passing : wait;
+								railCrossingStatus = close & trainStatus = gone : {open,close};	
+								railCrossingStatus = wait : close;
+								TRUE : railCrossingStatus;		
+							esac;
+
+---------------------------------------------------------
+-- Module - Vehicle
+---------------------------------------------------------						
+
+MODULE Vehicle(railCrossingStatus,trainStatus)
+VAR
+	vehicleStatus : {wait,passing};
+
+ASSIGN
+	init(vehicleStatus) := passing;
+	next(vehicleStatus) := case
+							trainStatus = horn | railCrossingStatus = close : wait;
+							railCrossingStatus = open : passing;
+							TRUE : vehicleStatus;
+						esac;
+
+--------------------------------------------------------
+-- Module - Main
+---------------------------------------------------------	
+
+MODULE main
+VAR
+	train : Train(railwayCrossing.railCrossingStatus);
+	railwayCrossing : RailwayCrossing(train.trainStatus,vehicle.vehicleStatus);
+	vehicle : Vehicle(railwayCrossing.railCrossingStatus,train.trainStatus);
+
+--------------------------------------------------------
+-- Requriments
+---------------------------------------------------------	
+
+-- Safety
+SPEC AG ( train.trainStatus=going -> railwayCrossing.railCrossingStatus=close )
+
+-- Safety
+SPEC AG !( train.trainStatus=going & vehicle.vehicleStatus = passing )
+
+-- Safety
+SPEC AG !( vehicle.vehicleStatus = passing & railwayCrossing.railCrossingStatus=close )
+
+-- Starvation
+SPEC AG ( vehicle.vehicleStatus = wait -> EF vehicle.vehicleStatus = passing  )
+
+--Safety
+SPEC AG ( (train.trainStatus = horn & vehicle.vehicleStatus = passing) -> AX (railwayCrossing.railCrossingStatus = wait)   )
+
+-- Gate will be open in future
+SPEC AG ( railwayCrossing.railCrossingStatus=close -> EF( railwayCrossing.railCrossingStatus = open ) )
+
+-- gate will remain closed until the train will go
+SPEC AG ((train.trainStatus=horn & railwayCrossing.railCrossingStatus = close) -> ( A[ (railwayCrossing.railCrossingStatus=close) U (train.trainStatus = gone)]))
+
+-- train will be on track after the horn
+SPEC AG ( (train.trainStatus=horn) -> AX( train.trainStatus=horn | train.trainStatus=going ))
+
+-- Below 2 rules are false if train come continuously and gate will not open.
+--  SPEC AG ( vehicle.vehicleStatus = wait -> AF vehicle.vehicleStatus = passing )
+
+-- SPEC AG ( railwayCrossing.railCrossingStatus=close -> EF( railwayCrossing.railCrossingStatus = open ) )
